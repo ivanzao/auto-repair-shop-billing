@@ -1,0 +1,86 @@
+services:
+  db:
+    image: postgres:18.1
+    container_name: billing-postgres
+    environment:
+      POSTGRES_USER: app_billing_local
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: auto_repair_shop_billing_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "app_billing_local", "-d", "auto_repair_shop_billing_local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:3.7
+    container_name: billing-localstack
+    environment:
+      SERVICES: sns,sqs
+    ports:
+      - "4566:4566"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "awslocal sns list-topics && awslocal sqs list-queues"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Provisiona tópico billing-events + fila billing-queue (assinada) no LocalStack.
+  localstack-init:
+    image: localstack/localstack:3.7
+    container_name: billing-localstack-init
+    depends_on:
+      localstack:
+        condition: service_healthy
+    entrypoint: ["bash", "-c"]
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+    command:
+      - |
+        set -e
+        TOPIC_ARN=$$(awslocal sns create-topic --name auto-repair-shop-billing-events-local --query TopicArn --output text)
+        QUEUE_URL=$$(awslocal sqs create-queue --queue-name auto-repair-shop-billing-queue-local --query QueueUrl --output text)
+        QUEUE_ARN=$$(awslocal sqs get-queue-attributes --queue-url "$$QUEUE_URL" --attribute-names QueueArn --query Attributes.QueueArn --output text)
+        awslocal sns subscribe --topic-arn "$$TOPIC_ARN" --protocol sqs --notification-endpoint "$$QUEUE_ARN" --attributes '{"RawMessageDelivery":"true"}'
+        echo "LocalStack provisioned: $$TOPIC_ARN / $$QUEUE_URL"
+
+  app:
+    build:
+      context: .
+      target: dev
+    container_name: billing-app
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/auto_repair_shop_billing_local
+      DATABASE_USERNAME: app_billing_local
+      DATABASE_PASSWORD: changeme
+      APP_BASE_URL: http://localhost:8080
+      AWS_ENDPOINT: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESSKEYID: test
+      AWS_SECRETACCESSKEY: test
+      SNS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:auto-repair-shop-billing-events-local
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/auto-repair-shop-billing-queue-local
+    depends_on:
+      db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

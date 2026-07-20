@@ -1,0 +1,38 @@
+application:
+  profile: dev
+
+server:
+  port: 8080
+
+database:
+  driverClassName: org.postgresql.Driver
+  url: jdbc:postgresql://localhost:5432/auto_repair_shop_billing_local
+  username: app_billing_local
+  password: changeme
+  maximumPoolSize: 6
+
+app:
+  base_url: http://localhost:8080
+
+quote:
+  approval:
+    ttl_days: 5
+
+sns:
+  topic:
+    # tópico de eventos do billing (produz QuoteEmailRequested/PaymentConfirmed/QuoteRejected/PaymentFailed).
+    # Em runtime: SNS_TOPIC_ARN (SSM billing-events-topic-arn)
+    arn: "arn:aws:sns:us-east-1:000000000000:auto-repair-shop-billing-events"
+
+sqs:
+  queue:
+    # fila de ingestão da saga (consome PartsReserved/ExecutionFailed). Em runtime: SQS_QUEUE_URL (SSM billing-saga-queue-url)
+    url: "http://localhost:4566/000000000000/auto-repair-shop-billing-saga"
+
+aws:
+  region: us-east-1
+
+mercadopago:
+  api_url: https://api.mercadopago.com
+  access_token: ""
+  webhook_secret: ""

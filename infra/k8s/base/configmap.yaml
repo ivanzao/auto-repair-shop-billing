@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-config
+data:
+  SERVER_PORT: "8080"
+  MERCADOPAGO_API_URL: "https://api.mercadopago.com"
+  # DATABASE_URL, DATABASE_USERNAME, SNS_TOPIC_ARN (billing-events), SQS_QUEUE_URL
+  # (billing-queue) e APP_BASE_URL (endpoint do API Gateway) são injetados em runtime
+  # pelo CI (lidos de SSM). MERCADOPAGO_ACCESS_TOKEN/WEBHOOK_SECRET vêm do ESO (secret
+  # billing-mercadopago). DATABASE_PASSWORD vem do secret billing-secret.

@@ -1,0 +1,32 @@
+application:
+  profile: test
+
+server:
+  port: 0
+
+database:
+  maximumPoolSize: 6
+
+app:
+  base_url: http://localhost:8080
+
+quote:
+  approval:
+    ttl_days: 5
+
+sns:
+  topic:
+    arn: placeholder
+sqs:
+  queue:
+    url: placeholder
+aws:
+  region: us-east-1
+  endpoint: placeholder
+  accessKeyId: test
+  secretAccessKey: test
+
+mercadopago:
+  api_url: https://api.mercadopago.com
+  access_token: ""
+  webhook_secret: "test-webhook-secret"
