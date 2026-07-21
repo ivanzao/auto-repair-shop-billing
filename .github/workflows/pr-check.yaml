@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -27,3 +29,12 @@ jobs:
 
       - name: Integration Tests
         run: ./gradlew integrationTest
+
+      - name: BDD Tests
+        run: ./gradlew bddTest
+
+      - name: Sonar
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        run: ./gradlew jacocoAggregatedReport sonar

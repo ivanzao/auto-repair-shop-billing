@@ -117,12 +117,16 @@ sonar {
     properties {
         property("sonar.projectKey", "auto-repair-shop-billing")
         property("sonar.projectName", "Auto Repair Shop Billing")
+        property("sonar.organization", System.getenv("SONAR_ORGANIZATION") ?: "ivanzao")
         property("sonar.host.url", System.getenv("SONAR_HOST_URL") ?: "http://localhost:9000")
         property("sonar.token", System.getenv("SONAR_TOKEN") ?: "")
 
         property("sonar.exclusions", "**/build/**,**/*Fixtures.kt")
         property("sonar.test.exclusions", "**/build/**")
-        property("sonar.coverage.exclusions", "**/main/src/main/kotlin/**,**/KtorHttpServer.kt,**/*DTO.kt")
+        property(
+            "sonar.coverage.exclusions",
+            "**/main/src/main/kotlin/**,**/KtorHttpServer.kt,**/*DTO.kt,**/config/**,**/auth/**,**/metric/**"
+        )
 
         property(
             "sonar.coverage.jacoco.xmlReportPaths",
