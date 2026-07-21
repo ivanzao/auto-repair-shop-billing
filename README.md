@@ -104,13 +104,32 @@ usado.
 ## Testes
 
 ```bash
-./gradlew test             # unit (todos os módulos)
-./gradlew integrationTest  # integração (Testcontainers: Postgres + LocalStack) — requer Docker
+./gradlew test                    # unit (todos os módulos)
+./gradlew integrationTest         # integração (Testcontainers: Postgres + LocalStack) — requer Docker
+./gradlew jacocoAggregatedReport  # relatório em build/reports/jacoco/...
 ```
 
 Os fluxos de saga são exercitados fim-a-fim nos testes de integração do `main`
 (`QuoteCreationIntegrationTest`, `QuoteApprovalIntegrationTest`, `PaymentWebhookIntegrationTest`,
 `ExecutionFailedIntegrationTest`), dirigidos pela fila SQS e pelo HTTP.
+
+### Cobertura
+
+| Métrica | Valor |
+|---|---|
+| Cobertura (SonarCloud) | **89.6%** |
+| Testes | 33 |
+| Quality gate | Passed |
+
+Análise a cada PR pelo step `Sonar` do `pr-check.yaml`, no projeto
+`auto-repair-shop-billing` da organização `ivanzao` no SonarCloud. O quality gate
+exige 80% de cobertura em código novo.
+
+Ficam fora da contagem de cobertura o wiring de framework (`config`, `auth`,
+`metric`), o módulo `main` e os DTOs — código sem lógica de negócio própria. Eles
+seguem analisados para bugs, code smells e security hotspots.
+
+<!-- TODO: print do dashboard do SonarCloud (projeto é privado, link exige login) -->
 
 ## Deploy em Kubernetes (Kustomize)
 
