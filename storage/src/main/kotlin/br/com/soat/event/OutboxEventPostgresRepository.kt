@@ -2,6 +2,7 @@ package br.com.soat.event
 
 import br.com.soat.event.model.DomainEvent
 import br.com.soat.event.repository.OutboxRepository
+import br.com.soat.tracing.Tracing
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
@@ -35,6 +36,7 @@ class OutboxEventPostgresRepository : OutboxRepository {
             eventVersion = event.eventVersion,
             occurredAt = event.occurredAt,
             payload = mapper.writeValueAsString(event),
+            traceparent = Tracing.currentTraceparent(),
         )
         Events.insert {
             it[id] = row.eventId
@@ -43,6 +45,7 @@ class OutboxEventPostgresRepository : OutboxRepository {
             it[version] = row.eventVersion
             it[type] = row.eventType
             it[payload] = row.payload
+            it[traceparent] = row.traceparent
         }
         row
     }
@@ -60,6 +63,7 @@ class OutboxEventPostgresRepository : OutboxRepository {
                     eventVersion = row[Events.version],
                     occurredAt = row[Events.createdAt].toJavaLocalDateTime().toInstant(ZoneOffset.UTC),
                     payload = row[Events.payload],
+                    traceparent = row[Events.traceparent],
                 )
             }
     }
