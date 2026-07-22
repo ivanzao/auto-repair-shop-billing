@@ -14,7 +14,7 @@ spec:
       annotations:
         instrumentation.opentelemetry.io/inject-java: "true"
     spec:
-      serviceAccountName: billing
+      serviceAccountName: auto-repair-shop-billing
       imagePullSecrets:
         - name: ghcr-pull-secret
       containers:
