@@ -180,6 +180,20 @@ jobs:
       - name: Wait for rollout
         run: kubectl rollout status deployment/billing -n auto-repair-shop-${{ env.ENV }} --timeout=300s
 
+      - name: Ensure OTel agent injected
+        run: |
+          NS=auto-repair-shop-${{ env.ENV }}
+          agent=$(kubectl get pods -n "$NS" -l app=billing \
+            -o jsonpath='{range .items[*]}{range .spec.initContainers[*]}{.name}{"\n"}{end}{end}' \
+            | grep -c opentelemetry-auto-instrumentation-java || true)
+          if [ "$agent" -eq 0 ]; then
+            echo "::warning::OTel agent not injected (mpod webhook raced pod creation); restarting"
+            kubectl rollout restart deployment/billing -n "$NS"
+            kubectl rollout status deployment/billing -n "$NS" --timeout=300s
+          else
+            echo "OTel agent present."
+          fi
+
       - name: Smoke test via API Gateway
         run: |
           for i in $(seq 1 10); do
