@@ -36,11 +36,13 @@ class SqsClient(
                 queueUrl = this@SqsClient.queueUrl
                 maxNumberOfMessages = maxMessages
                 waitTimeSeconds = waitSeconds
+                messageAttributeNames = listOf("traceparent")
             },
         ).messages?.mapNotNull { msg ->
             val body = msg.body ?: return@mapNotNull null
             val handle = msg.receiptHandle ?: return@mapNotNull null
-            Message(body, handle)
+            val traceparent = msg.messageAttributes?.get("traceparent")?.stringValue
+            Message(body, handle, traceparent)
         } ?: emptyList()
     }
 

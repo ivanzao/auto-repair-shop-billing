@@ -5,6 +5,8 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import br.com.soat.tracing.Tracing
+import io.opentelemetry.api.trace.SpanKind
 import org.slf4j.LoggerFactory
 
 class InboundEventConsumer(
@@ -35,11 +37,24 @@ class InboundEventConsumer(
                 continue
             }
 
-            if (dispatch(envelope)) queue.delete(message.receiptHandle)
+            if (dispatch(envelope, message.traceparent)) queue.delete(message.receiptHandle)
         }
     }
 
-    private fun dispatch(envelope: EventEnvelope): Boolean {
+    private fun dispatch(envelope: EventEnvelope, traceparent: String?): Boolean {
+        val span = Tracing.tracer
+            .spanBuilder(envelope.eventType)
+            .setSpanKind(SpanKind.CONSUMER)
+            .setParent(Tracing.extractContext(traceparent))
+            .startSpan()
+        return try {
+            span.makeCurrent().use { dispatchHandlers(envelope) }
+        } finally {
+            span.end()
+        }
+    }
+
+    private fun dispatchHandlers(envelope: EventEnvelope): Boolean {
         val matched = byType[envelope.eventType].orEmpty()
         if (matched.isEmpty()) {
             logger.info(
