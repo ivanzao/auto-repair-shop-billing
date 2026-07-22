@@ -99,7 +99,7 @@ jobs:
           CLUSTER=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/eks/cluster-name --query Parameter.Value --output text)
           DB_SECRET_ARN=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/billing/db/secret-arn --query Parameter.Value --output text)
           SNS_TOPIC=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sns/billing-events-topic-arn --query Parameter.Value --output text)
-          QUEUE_URL=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sqs/billing-saga-queue-url --query Parameter.Value --output text)
+          QUEUE_URL=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sqs/billing-queue-url --query Parameter.Value --output text)
           APIGW=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/apigw/endpoint --query Parameter.Value --output text)
           {
             echo "cluster=$CLUSTER"
