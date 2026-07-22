@@ -9,7 +9,6 @@ class SnsEventPublisher(
     private val outbox: OutboxRepository,
     private val sns: SnsPort,
     private val serializer: EventEnvelopeSerializer,
-    private val traceparentProvider: () -> String? = { null },
 ) : EventPublisher {
 
     private val logger = LoggerFactory.getLogger(SnsEventPublisher::class.java)
@@ -20,7 +19,7 @@ class SnsEventPublisher(
                 payload = serializer.toJson(event),
                 eventType = event.eventType,
                 messageId = event.eventId.toString(),
-                traceparent = traceparentProvider(),
+                traceparent = event.traceparent,
             )
             outbox.delete(event.eventId)
             logger.info("Published event {} ({}) to SNS", event.eventId, event.eventType)

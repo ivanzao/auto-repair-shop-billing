@@ -49,6 +49,21 @@ class SnsEventPublisherTest {
     }
 
     @Test
+    fun `passes the outbox event traceparent to sns`() {
+        val captured = mutableListOf<String?>()
+        val sns = object : SnsPort {
+            override fun publish(payload: String, eventType: String, messageId: String, traceparent: String?) {
+                captured += traceparent
+            }
+        }
+        val e = event().copy(traceparent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+
+        publisher(FakeOutbox(), sns).publish(e)
+
+        assertEquals(listOf(e.traceparent), captured)
+    }
+
+    @Test
     fun `keeps the outbox row and does not throw when publishing fails`() {
         val outbox = FakeOutbox()
         val sns = object : SnsPort {
