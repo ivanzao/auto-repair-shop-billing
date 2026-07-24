@@ -17,6 +17,7 @@ import io.ktor.http.headersOf
 import java.math.BigDecimal
 import java.util.UUID
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -73,9 +74,41 @@ class MercadoPagoPaymentAdapterTest {
         assertEquals(HttpMethod.Post, request.method)
         assertEquals("/checkout/preferences", request.url.encodedPath)
         assertEquals("Bearer TEST-TOKEN", request.headers[HttpHeaders.Authorization])
+        assertEquals(orderId.toString(), request.headers["X-Idempotency-Key"])
         val body = (request.body as TextContent).text
         assertTrue(body.contains(""""external_reference":"$orderId""""), body)
         assertTrue(body.contains(""""title":"Oil Change""""), body)
+        assertTrue(
+            body.contains(""""notification_url":"https://billing.example.com/v1/webhooks/mercadopago""""),
+            body,
+        )
+    }
+
+    @Test
+    fun `createPreference throws PaymentProviderException on non-2xx response`() {
+        val adapter = adapter {
+            respond(
+                content = """{"message":"invalid token","status":401}""",
+                status = HttpStatusCode.Unauthorized,
+                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+            )
+        }
+
+        val ex = assertThrows(PaymentProviderException::class.java) {
+            adapter.createPreference(quote(UUID.randomUUID()))
+        }
+        assertEquals(401, ex.statusCode)
+    }
+
+    @Test
+    fun `refund sends an idempotency key derived from the payment id`() {
+        val adapter = adapter {
+            respond(content = """{"id":9999,"status":"approved"}""", status = HttpStatusCode.Created)
+        }
+
+        adapter.refund("PAY-1")
+
+        assertEquals("refund-PAY-1", requests.single().headers["X-Idempotency-Key"])
     }
 
     @Test

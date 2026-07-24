@@ -16,6 +16,8 @@ import aws.sdk.kotlin.services.sqs.model.SendMessageRequest
 import aws.smithy.kotlin.runtime.net.url.Url
 import br.com.soat.config.Config
 import br.com.soat.config.fromClasspath
+import br.com.soat.payment.FakePaymentProvider
+import br.com.soat.payment.PaymentProviderPort
 import br.com.soat.scheduler.ScheduledTaskRunner
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -246,5 +248,6 @@ abstract class IntegrationTest {
 
     private fun testModule(config: Config) = module {
         single<Config> { config }
+        single<PaymentProviderPort> { FakePaymentProvider(config.getString("app.base_url")) }
     }
 }

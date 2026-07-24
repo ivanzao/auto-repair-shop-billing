@@ -59,3 +59,6 @@ infra/k8s/overlays/*/tgb-patch.yaml
 
 ### IntelliJ IDEA ###
 .idea/
+# local MP smoke test (never commit)
+.env
+.mp-token

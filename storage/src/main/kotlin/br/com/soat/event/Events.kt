@@ -11,6 +11,7 @@ object Events : Table("events") {
 
     val type = varchar("type", 255)
     val payload = text("payload")
+    val traceparent = varchar("traceparent", 64).nullable()
 
     init {
         PrimaryKey(id)

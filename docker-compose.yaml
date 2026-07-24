@@ -65,10 +65,13 @@ services:
       APP_BASE_URL: http://localhost:8080
       AWS_ENDPOINT: http://localstack:4566
       AWS_REGION: us-east-1
-      AWS_ACCESSKEYID: test
-      AWS_SECRETACCESSKEY: test
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
       SNS_TOPIC_ARN: arn:aws:sns:us-east-1:000000000000:auto-repair-shop-billing-events-local
       SQS_QUEUE_URL: http://localstack:4566/000000000000/auto-repair-shop-billing-queue-local
+      # obrigatórios (o Fake é só para testes). Forneça via shell ou .env, ex: MERCADOPAGO_ACCESS_TOKEN=TEST-...
+      MERCADOPAGO_ACCESS_TOKEN: "${MERCADOPAGO_ACCESS_TOKEN:-}"
+      MERCADOPAGO_WEBHOOK_SECRET: "${MERCADOPAGO_WEBHOOK_SECRET:-}"
     depends_on:
       db:
         condition: service_healthy

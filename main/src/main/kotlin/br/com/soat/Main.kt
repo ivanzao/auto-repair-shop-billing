@@ -11,7 +11,6 @@ import br.com.soat.quote.QuoteApprovalUseCase
 import br.com.soat.quote.QuoteListenerUseCase
 import br.com.soat.quote.repository.QuoteApprovalTokenRepository
 import br.com.soat.quote.repository.QuoteRepository
-import br.com.soat.payment.FakePaymentProvider
 import br.com.soat.payment.MercadoPagoPaymentAdapter
 import br.com.soat.payment.MercadoPagoSignatureValidator
 import io.ktor.client.HttpClient
@@ -131,18 +130,13 @@ val applicationModule = module {
     single { HttpClient(CIO) }
     single<PaymentProviderPort> {
         val cfg = get<Config>()
-        val token = cfg.getStringOrNull("mercadopago.access_token")
-        if (token.isNullOrBlank()) {
-            FakePaymentProvider(cfg.getString("app.base_url"))
-        } else {
-            MercadoPagoPaymentAdapter(
-                client = get(),
-                apiUrl = cfg.getString("mercadopago.api_url"),
-                accessToken = token,
-                backUrlBase = cfg.getString("app.base_url"),
-                mapper = get(),
-            )
-        }
+        MercadoPagoPaymentAdapter(
+            client = get(),
+            apiUrl = cfg.getString("mercadopago.api_url"),
+            accessToken = cfg.getString("mercadopago.access_token"),
+            backUrlBase = cfg.getString("app.base_url"),
+            mapper = get(),
+        )
     }
 
     single<MessageQueue> {

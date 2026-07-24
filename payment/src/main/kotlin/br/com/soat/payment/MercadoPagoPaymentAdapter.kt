@@ -9,11 +9,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import io.ktor.client.HttpClient
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
+import io.ktor.http.isSuccess
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 
@@ -37,14 +40,16 @@ class MercadoPagoPaymentAdapter(
                     "failure" to "$backUrlBase/v1/quotes/decline",
                     "pending" to "$backUrlBase/v1/quotes/approve",
                 ),
+                "notification_url" to "$backUrlBase/v1/webhooks/mercadopago",
             ),
         )
         val response = client.post("$apiUrl/checkout/preferences") {
             bearerAuth(accessToken)
+            header("X-Idempotency-Key", quote.orderId.toString())
             contentType(ContentType.Application.Json)
             setBody(body)
         }
-        val node = mapper.readTree(response.bodyAsText())
+        val node = mapper.readTree(response.ensureSuccess())
         PaymentPreference(
             preferenceId = node["id"].asText(),
             initPoint = node["init_point"].asText(),
@@ -53,7 +58,7 @@ class MercadoPagoPaymentAdapter(
 
     override fun getPayment(paymentId: String): PaymentDetails = runBlocking {
         val response = client.get("$apiUrl/v1/payments/$paymentId") { bearerAuth(accessToken) }
-        val node = mapper.readTree(response.bodyAsText())
+        val node = mapper.readTree(response.ensureSuccess())
         PaymentDetails(
             paymentId = paymentId,
             orderId = UUID.fromString(node["external_reference"].asText()),
@@ -68,11 +73,19 @@ class MercadoPagoPaymentAdapter(
 
     override fun refund(paymentId: String) {
         runBlocking {
-            client.post("$apiUrl/v1/payments/$paymentId/refunds") {
+            val response = client.post("$apiUrl/v1/payments/$paymentId/refunds") {
                 bearerAuth(accessToken)
+                header("X-Idempotency-Key", "refund-$paymentId")
                 contentType(ContentType.Application.Json)
                 setBody("{}")
             }
+            response.ensureSuccess()
         }
+    }
+
+    private suspend fun HttpResponse.ensureSuccess(): String {
+        val body = bodyAsText()
+        if (!status.isSuccess()) throw PaymentProviderException(status.value, body)
+        return body
     }
 }

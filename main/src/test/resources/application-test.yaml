@@ -16,13 +16,13 @@ quote:
 
 sns:
   topic:
-    arn: placeholder
+    arn: __injected-by-testcontainers__
 sqs:
   queue:
-    url: placeholder
+    url: __injected-by-testcontainers__
 aws:
   region: us-east-1
-  endpoint: placeholder
+  endpoint: __injected-by-testcontainers__
   accessKeyId: test
   secretAccessKey: test
 

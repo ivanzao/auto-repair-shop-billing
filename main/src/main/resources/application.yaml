@@ -1,38 +1,40 @@
 application:
-  profile: dev
+  profile: "${APPLICATION_PROFILE:dev}"
 
 server:
-  port: 8080
+  port: "${SERVER_PORT:8080}"
 
 database:
   driverClassName: org.postgresql.Driver
-  url: jdbc:postgresql://localhost:5432/auto_repair_shop_billing_local
-  username: app_billing_local
-  password: changeme
-  maximumPoolSize: 6
+  url: "${DATABASE_URL:jdbc:postgresql://localhost:5432/auto_repair_shop_billing_local}"
+  username: "${DATABASE_USERNAME:app_billing_local}"
+  password: "${DATABASE_PASSWORD:changeme}"
+  maximumPoolSize: "${DATABASE_MAX_POOL_SIZE:6}"
 
 app:
-  base_url: http://localhost:8080
+  base_url: "${APP_BASE_URL:http://localhost:8080}"
 
 quote:
   approval:
-    ttl_days: 5
+    ttl_days: "${QUOTE_APPROVAL_TTL_DAYS:5}"
 
 sns:
   topic:
-    # tópico de eventos do billing (produz QuoteEmailRequested/PaymentConfirmed/QuoteRejected/PaymentFailed).
-    # Em runtime: SNS_TOPIC_ARN (SSM billing-events-topic-arn)
-    arn: "arn:aws:sns:us-east-1:000000000000:auto-repair-shop-billing-events"
+    # tópico de eventos do billing. Sempre setado por compose/k8s (SNS_TOPIC_ARN).
+    arn: "${SNS_TOPIC_ARN}"
 
 sqs:
   queue:
-    # fila de ingestão da saga (consome PartsReserved/ExecutionFailed). Em runtime: SQS_QUEUE_URL (SSM billing-saga-queue-url)
-    url: "http://localhost:4566/000000000000/auto-repair-shop-billing-saga"
+    # fila de ingestão da saga. Sempre setado por compose/k8s (SQS_QUEUE_URL).
+    url: "${SQS_QUEUE_URL}"
 
 aws:
-  region: us-east-1
+  region: "${AWS_REGION:us-east-1}"
+  endpoint: "${AWS_ENDPOINT:}"
+  accessKeyId: "${AWS_ACCESS_KEY_ID:}"
+  secretAccessKey: "${AWS_SECRET_ACCESS_KEY:}"
 
 mercadopago:
-  api_url: https://api.mercadopago.com
-  access_token: ""
-  webhook_secret: ""
+  api_url: "${MERCADOPAGO_API_URL:https://api.mercadopago.com}"
+  access_token: "${MERCADOPAGO_ACCESS_TOKEN}"
+  webhook_secret: "${MERCADOPAGO_WEBHOOK_SECRET}"

@@ -44,6 +44,21 @@ class PaymentWebhookIntegrationTest : IntegrationTest() {
     }
 
     @Test
+    fun `a non-payment notification (merchant_order) is acked with 200 and ignored`() {
+        val quote = persistQuote(status = QuoteStatus.APPROVED)
+        val dataId = quote.orderId.toString()
+
+        val response = http.post(
+            "/v1/webhooks/mercadopago?data.id=$dataId&type=merchant_order",
+            body = """{"type":"merchant_order","data":{"id":"$dataId"}}""",
+            headers = signatureHeaders(dataId),
+        )
+
+        assertEquals(200, response.statusCode())
+        assertEquals(QuoteStatus.APPROVED, quoteRepository.findByOrderId(quote.orderId)!!.status)
+    }
+
+    @Test
     fun `an invalid signature is rejected with 401 and does not change the quote`() {
         val quote = persistQuote(status = QuoteStatus.APPROVED)
         val paymentId = quote.orderId.toString()

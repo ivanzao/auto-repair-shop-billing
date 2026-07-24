@@ -2,7 +2,8 @@ name: Build & Deploy
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
+  workflow_dispatch: {}
 
 env:
   REGISTRY: ghcr.io
@@ -73,123 +74,18 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  deploy:
-    name: Deploy to Kubernetes
-    runs-on: ubuntu-latest
+  deploy-hml:
     needs: build
-    env:
-      ENV: ${{ github.ref_name == 'main' && 'prod' || 'hml' }}
-    steps:
-      - uses: actions/checkout@v4
+    uses: ./.github/workflows/deploy-env.yaml
+    with:
+      environment: hml
+      image_tag: ${{ needs.build.outputs.image_tag }}
+    secrets: inherit
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Install kustomize
-        uses: imranismail/setup-kustomize@v2
-
-      - name: Read SSM params (cluster, db secret, SNS topic, SQS queue, API GW)
-        id: ssm
-        run: |
-          CLUSTER=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/eks/cluster-name --query Parameter.Value --output text)
-          DB_SECRET_ARN=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/billing/db/secret-arn --query Parameter.Value --output text)
-          SNS_TOPIC=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sns/billing-events-topic-arn --query Parameter.Value --output text)
-          QUEUE_URL=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sqs/billing-saga-queue-url --query Parameter.Value --output text)
-          APIGW=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/apigw/endpoint --query Parameter.Value --output text)
-          {
-            echo "cluster=$CLUSTER"
-            echo "db_secret_arn=$DB_SECRET_ARN"
-            echo "sns_topic=$SNS_TOPIC"
-            echo "queue_url=$QUEUE_URL"
-            echo "apigw_endpoint=$APIGW"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Read DB credentials from Secrets Manager
-        id: db
-        run: |
-          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ${{ steps.ssm.outputs.db_secret_arn }} --query SecretString --output text)
-          DB_HOST=$(echo "$SECRET_JSON" | jq -r .host)
-          DB_PORT=$(echo "$SECRET_JSON" | jq -r .port)
-          DB_NAME=$(echo "$SECRET_JSON" | jq -r .dbname)
-          DB_USER=$(echo "$SECRET_JSON" | jq -r .username)
-          DB_PWD=$(echo "$SECRET_JSON" | jq -r .password)
-          {
-            echo "host=$DB_HOST"
-            echo "port=$DB_PORT"
-            echo "name=$DB_NAME"
-            echo "user=$DB_USER"
-            echo "password=$DB_PWD"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Populate Mercado Pago secret (consumed by ESO)
-        run: |
-          aws secretsmanager put-secret-value \
-            --secret-id auto-repair-shop/${{ env.ENV }}/mercadopago \
-            --secret-string "{\"access_token\":\"${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}\",\"webhook_secret\":\"${{ secrets.MERCADOPAGO_WEBHOOK_SECRET }}\"}"
-
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name ${{ steps.ssm.outputs.cluster }} --region ${{ env.AWS_REGION }}
-
-      - name: Create K8s Secret with DB password
-        run: |
-          kubectl create secret generic billing-secret \
-            --namespace=auto-repair-shop-${{ env.ENV }} \
-            --from-literal="DATABASE_PASSWORD=${{ steps.db.outputs.password }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Create K8s Secret for GHCR image pull
-        run: |
-          kubectl create secret docker-registry ghcr-pull-secret \
-            --namespace=auto-repair-shop-${{ env.ENV }} \
-            --docker-server=ghcr.io \
-            --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GHCR_TOKEN }} \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Rewrite ConfigMap overlay with runtime values
-        working-directory: infra/k8s/overlays/${{ env.ENV }}
-        run: |
-          cat > configmap-patch.yaml <<EOF
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: billing-config
-          data:
-            APPLICATION_PROFILE: "${{ env.ENV }}"
-            DATABASE_URL: "jdbc:postgresql://${{ steps.db.outputs.host }}:${{ steps.db.outputs.port }}/${{ steps.db.outputs.name }}"
-            DATABASE_USERNAME: "${{ steps.db.outputs.user }}"
-            SNS_TOPIC_ARN: "${{ steps.ssm.outputs.sns_topic }}"
-            SQS_QUEUE_URL: "${{ steps.ssm.outputs.queue_url }}"
-            APP_BASE_URL: "${{ steps.ssm.outputs.apigw_endpoint }}"
-            MERCADOPAGO_API_URL: "https://api.mercadopago.com"
-          EOF
-
-      - name: Set image tag in overlay
-        working-directory: infra/k8s/overlays/${{ env.ENV }}
-        run: |
-          kustomize edit set image ghcr.io/ivanzao/auto-repair-shop-billing=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image_tag }}
-
-      - name: Apply Kustomize overlay
-        run: kubectl apply -k infra/k8s/overlays/${{ env.ENV }}
-
-      - name: Wait for rollout
-        run: kubectl rollout status deployment/billing -n auto-repair-shop-${{ env.ENV }} --timeout=300s
-
-      - name: Smoke test via API Gateway
-        run: |
-          for i in $(seq 1 10); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.ssm.outputs.apigw_endpoint }}/health")
-            if [ "$CODE" = "200" ]; then
-              echo "Smoke test passed (status=200)"
-              exit 0
-            fi
-            echo "Attempt $i/10 - got status $CODE, retrying in 5s..."
-            sleep 5
-          done
-          echo "Smoke test failed after 10 attempts"
-          exit 1
+  deploy-prod:
+    needs: [build, deploy-hml]
+    uses: ./.github/workflows/deploy-env.yaml
+    with:
+      environment: prod
+      image_tag: ${{ needs.build.outputs.image_tag }}
+    secrets: inherit

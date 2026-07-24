@@ -15,7 +15,7 @@ class MercadoPagoSignatureValidator(private val webhookSecret: String) : Webhook
         val ts = parts["ts"] ?: return false
         val v1 = parts["v1"] ?: return false
 
-        val manifest = "id:$dataId;request-id:$requestId;ts:$ts;"
+        val manifest = "id:${dataId.lowercase()};request-id:$requestId;ts:$ts;"
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(webhookSecret.toByteArray(), "HmacSHA256"))
         val computed = mac.doFinal(manifest.toByteArray()).joinToString("") { "%02x".format(it) }

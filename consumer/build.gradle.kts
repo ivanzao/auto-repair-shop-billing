@@ -11,6 +11,7 @@ dependencies {
     implementation(libs.aws.sdk.kotlin.sqs)
     implementation(libs.jackson.module.kotlin)
     implementation(libs.jackson.datatype.jsr310)
+    implementation(libs.opentelemetry.api)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

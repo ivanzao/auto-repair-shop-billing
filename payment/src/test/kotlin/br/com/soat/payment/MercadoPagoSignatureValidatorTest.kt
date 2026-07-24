@@ -19,10 +19,21 @@ class MercadoPagoSignatureValidatorTest {
 
     @Test
     fun `accepts a signature matching the manifest`() {
-        val dataId = "PAY-1"
+        val dataId = "12345678"
         val requestId = "req-1"
         val ts = "1700000000"
         val v1 = hmac("id:$dataId;request-id:$requestId;ts:$ts;")
+
+        assertTrue(validator.isValid(dataId, requestId, "ts=$ts,v1=$v1"))
+    }
+
+    @Test
+    fun `lowercases an alphanumeric data id before building the manifest`() {
+        // Mercado Pago requires alphanumeric data.id to be lowercased in the manifest.
+        val dataId = "ORD01JQ4S4KY8HWQ6NA5PXB65B3D3"
+        val requestId = "req-1"
+        val ts = "1700000000"
+        val v1 = hmac("id:${dataId.lowercase()};request-id:$requestId;ts:$ts;")
 
         assertTrue(validator.isValid(dataId, requestId, "ts=$ts,v1=$v1"))
     }

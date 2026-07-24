@@ -1,6 +1,5 @@
 package br.com.soat.payment
 
-import br.com.soat.payment.PaymentProviderPort
 import br.com.soat.payment.model.PaymentDetails
 import br.com.soat.payment.model.PaymentPreference
 import br.com.soat.payment.model.PaymentState

@@ -17,6 +17,13 @@ fun Application.webhookRoutes(koin: Koin) {
     routing {
         post("/v1/webhooks/mercadopago") {
             call.receiveText()
+
+            val type = call.request.queryParameters["type"] ?: call.request.queryParameters["topic"]
+            if (type != null && type != "payment") {
+                call.respond(HttpStatusCode.OK)
+                return@post
+            }
+
             val dataId = call.request.queryParameters["data.id"] ?: call.request.queryParameters["id"]
             val requestId = call.request.headers["x-request-id"] ?: ""
             val signature = call.request.headers["x-signature"] ?: ""
