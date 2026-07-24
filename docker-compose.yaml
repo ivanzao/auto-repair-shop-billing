@@ -29,7 +29,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # Provisiona tópico billing-events + fila billing-queue (assinada) no LocalStack.
   localstack-init:
     image: localstack/localstack:3.7
     container_name: billing-localstack-init

@@ -44,12 +44,14 @@ jobs:
           SNS_TOPIC=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sns/billing-events-topic-arn --query Parameter.Value --output text)
           QUEUE_URL=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sqs/billing-queue-url --query Parameter.Value --output text)
           APIGW=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/apigw/endpoint --query Parameter.Value --output text)
+          NODE_PORT=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/billing/node-port --query Parameter.Value --output text)
           {
             echo "cluster=$CLUSTER"
             echo "db_secret_arn=$DB_SECRET_ARN"
             echo "sns_topic=$SNS_TOPIC"
             echo "queue_url=$QUEUE_URL"
             echo "apigw_endpoint=$APIGW"
+            echo "node_port=$NODE_PORT"
           } >> "$GITHUB_OUTPUT"
 
       - name: Read DB credentials from Secrets Manager
@@ -112,6 +114,15 @@ jobs:
             MERCADOPAGO_API_URL: "https://api.mercadopago.com"
           EOF
 
+      - name: Rewrite Service nodePort from SSM
+        working-directory: infra/k8s/overlays/${{ env.ENV }}
+        run: |
+          cat > nodeport-patch.yaml <<EOF
+          - op: add
+            path: /spec/ports/0/nodePort
+            value: ${{ steps.ssm.outputs.node_port }}
+          EOF
+
       - name: Set image tag in overlay
         working-directory: infra/k8s/overlays/${{ env.ENV }}
         run: |
@@ -140,7 +151,7 @@ jobs:
       - name: Smoke test via API Gateway
         run: |
           for i in $(seq 1 10); do
-            CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.ssm.outputs.apigw_endpoint }}/health")
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.ssm.outputs.apigw_endpoint }}/billing/health")
             if [ "$CODE" = "200" ]; then
               echo "Smoke test passed (status=200)"
               exit 0

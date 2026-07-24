@@ -20,12 +20,10 @@ quote:
 
 sns:
   topic:
-    # tópico de eventos do billing. Sempre setado por compose/k8s (SNS_TOPIC_ARN).
     arn: "${SNS_TOPIC_ARN}"
 
 sqs:
   queue:
-    # fila de ingestão da saga. Sempre setado por compose/k8s (SQS_QUEUE_URL).
     url: "${SQS_QUEUE_URL}"
 
 aws:
