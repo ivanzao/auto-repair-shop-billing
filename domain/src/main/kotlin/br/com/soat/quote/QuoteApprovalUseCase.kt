@@ -1,6 +1,7 @@
 package br.com.soat.quote
 
 import br.com.soat.payment.PaymentProviderPort
+import br.com.soat.quote.event.QuoteApprovedEvent
 import br.com.soat.quote.event.QuoteRejectedEvent
 import br.com.soat.quote.exception.InvalidApprovalTokenException
 import br.com.soat.quote.exception.QuoteNotFoundException
@@ -30,10 +31,19 @@ class QuoteApprovalUseCase(
 
         val preference = paymentProvider.createPreference(quote)
 
-        tx.inTransaction {
+        val event = tx.inTransaction {
             tokenRepository.update(token.markAsUsed())
             quoteRepository.update(quote.approved(preference.preferenceId))
+            outbox.save(
+                QuoteApprovedEvent(
+                    orderId = quote.orderId,
+                    customer = QuoteApprovedEvent.Customer(quote.customerName, quote.customerEmail),
+                    totalAmount = quote.totalAmount,
+                    checkoutUrl = preference.initPoint,
+                ),
+            )
         }
+        eventPublisher.publish(event)
         logger.info("Quote approved", kv("orderId", quote.orderId), kv("preferenceId", preference.preferenceId))
         return preference.initPoint
     }

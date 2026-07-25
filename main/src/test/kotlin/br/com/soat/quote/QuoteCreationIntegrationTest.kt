@@ -25,10 +25,26 @@ class QuoteCreationIntegrationTest : IntegrationTest() {
 
         val published = waitForPublishedEvent("QuoteEmailRequested")
         assertEquals(orderId.toString(), published.payload["orderId"].asText())
-        assertEquals(2, published.payload["lineItems"].size())
+        val services = published.payload["services"]
+        assertEquals(1, services.size())
+        assertEquals("Oil Change", services[0]["name"].asText())
+
+        val supplies = published.payload["supplies"]
+        assertEquals(1, supplies.size())
+        assertEquals("Oil Filter", supplies[0]["name"].asText())
+        assertEquals(2, supplies[0]["quantity"].asInt())
+        assertEquals(0, BigDecimal("30.00").compareTo(supplies[0]["unitPrice"].decimalValue()))
 
         val approvalUrl = published.payload["approvalUrl"].asText()
         assertTrue(approvalUrl.contains("/v1/quotes/approve?token="), "approvalUrl: $approvalUrl")
+
+        val declineUrl = published.payload["declineUrl"].asText()
+        assertTrue(declineUrl.contains("/v1/quotes/decline?token="), "declineUrl: $declineUrl")
+        assertEquals(
+            approvalUrl.substringAfter("token="),
+            declineUrl.substringAfter("token="),
+            "os dois links têm que usar o mesmo token",
+        )
 
         val quote = quoteRepository.findByOrderId(orderId)!!
         assertEquals(reservationId, quote.reservationId)

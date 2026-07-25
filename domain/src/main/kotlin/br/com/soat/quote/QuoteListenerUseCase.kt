@@ -55,6 +55,7 @@ class QuoteListenerUseCase(
             expiresAt = LocalDateTime.now().plusDays(approvalTtlDays),
         )
         val approvalUrl = "$baseUrl/v1/quotes/approve?token=${token.id}"
+        val declineUrl = "$baseUrl/v1/quotes/decline?token=${token.id}"
 
         val event = tx.inTransaction {
             quoteRepository.save(quote)
@@ -65,8 +66,14 @@ class QuoteListenerUseCase(
                     orderId = request.orderId,
                     customer = QuoteEmailRequestedEvent.Customer(request.customerName, request.customerEmail),
                     totalAmount = request.totalAmount,
-                    lineItems = lineItems.map { QuoteEmailRequestedEvent.LineItem(it.name, it.price) },
+                    services = request.services.map {
+                        QuoteEmailRequestedEvent.Service(it.name, it.price)
+                    },
+                    supplies = request.supplies.map {
+                        QuoteEmailRequestedEvent.Supply(it.name, it.quantity, it.unitPrice)
+                    },
                     approvalUrl = approvalUrl,
+                    declineUrl = declineUrl,
                 ),
             )
         }

@@ -44,15 +44,17 @@ orquestrador central.
 | eventType | gatilho |
 |---|---|
 | `QuoteEmailRequested` | após criar a Quote (consumido pela Lambda de e-mail, assinatura filtrada) |
+| `QuoteApproved` | link `/approve`: preferência criada no MP, leva o `checkoutUrl` ao e-mail |
 | `PaymentConfirmed` | webhook MP: pagamento aprovado |
 | `QuoteRejected` | link `/decline` |
 | `PaymentFailed` | webhook MP: pagamento recusado/expirado |
 
-`QuoteApproved` é **interno** (não publicado): disparado pelo link `/approve`, cria a preferência
-no Mercado Pago e redireciona ao checkout.
+O link `/approve` cria a preferência no Mercado Pago, redireciona 302 ao checkout e publica
+`QuoteApproved` com o `checkoutUrl`, para que a Lambda de e-mail mande o link de pagamento — o
+caminho durável para quem abandona a aba do checkout.
 
 Fluxo feliz: `SuppliesReserved` → `QuoteEmailRequested` → (cliente aprova → `QuoteApproved`
-interno → checkout MP) → webhook → `PaymentConfirmed`.
+→ checkout MP) → webhook → `PaymentConfirmed`.
 
 Contrato completo: `auto-repair-shop-infra/docs/saga-event-contract.md`.
 

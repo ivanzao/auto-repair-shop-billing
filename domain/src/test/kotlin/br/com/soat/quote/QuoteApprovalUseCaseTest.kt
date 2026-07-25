@@ -3,6 +3,7 @@ package br.com.soat.quote
 import br.com.soat.payment.PaymentProviderPort
 import br.com.soat.payment.model.PaymentDetails
 import br.com.soat.payment.model.PaymentPreference
+import br.com.soat.quote.event.QuoteApprovedEvent
 import br.com.soat.quote.event.QuoteRejectedEvent
 import br.com.soat.quote.exception.InvalidApprovalTokenException
 import br.com.soat.quote.repository.QuoteApprovalTokenRepository
@@ -96,6 +97,28 @@ class QuoteApprovalUseCaseTest {
     }
 
     @Test
+    fun `approve enqueues QuoteApproved carrying the checkout url and the customer`() {
+        val q = quote()
+        val token = validToken(q.orderId)
+        val outbox = FakeOutbox()
+        val publisher = FakePublisher()
+        val useCase = QuoteApprovalUseCase(
+            FakeQuoteRepository(q), FakeTokenRepository(token), FakePaymentProvider(),
+            outbox, publisher, DirectTransaction,
+        )
+
+        val initPoint = useCase.approve(token.id)
+
+        val event = outbox.saved as QuoteApprovedEvent
+        assertEquals(q.orderId, event.orderId)
+        assertEquals(initPoint, event.checkoutUrl)
+        assertEquals("John", event.customer.name)
+        assertEquals("john@example.com", event.customer.email)
+        assertEquals(0, q.totalAmount.compareTo(event.totalAmount))
+        assertEquals(1, publisher.published.size)
+    }
+
+    @Test
     fun `approve with an invalid token throws and changes nothing`() {
         val q = quote()
         val quoteRepo = FakeQuoteRepository(q)
@@ -110,14 +133,19 @@ class QuoteApprovalUseCaseTest {
     }
 
     @Test
-    fun `approve with an already-used token throws`() {
+    fun `approve with an already-used token throws and publishes nothing`() {
         val q = quote()
         val used = validToken(q.orderId).markAsUsed()
+        val provider = FakePaymentProvider()
+        val publisher = FakePublisher()
         val useCase = QuoteApprovalUseCase(
-            FakeQuoteRepository(q), FakeTokenRepository(used), FakePaymentProvider(),
-            FakeOutbox(), FakePublisher(), DirectTransaction,
+            FakeQuoteRepository(q), FakeTokenRepository(used), provider,
+            FakeOutbox(), publisher, DirectTransaction,
         )
+
         assertThrows(InvalidApprovalTokenException::class.java) { useCase.approve(used.id) }
+        assertEquals(0, provider.createPreferenceCalls)
+        assertEquals(0, publisher.published.size)
     }
 
     @Test

@@ -14,7 +14,7 @@ class QuoteApprovalIntegrationTest : IntegrationTest() {
     private val quoteRepository: QuoteRepository by lazy { get<QuoteRepository>() }
 
     @Test
-    fun `approve redirects 302 to the checkout and marks the quote APPROVED`() {
+    fun `approve redirects 302 to the checkout, marks the quote APPROVED and publishes QuoteApproved`() {
         val quote = persistQuote()
         val token = persistApprovalToken(quote.orderId)
 
@@ -27,6 +27,12 @@ class QuoteApprovalIntegrationTest : IntegrationTest() {
         val updated = quoteRepository.findByOrderId(quote.orderId)!!
         assertEquals(QuoteStatus.APPROVED, updated.status)
         assertNotNull(updated.preferenceId)
+
+        val published = waitForPublishedEvent("QuoteApproved")
+        assertEquals(quote.orderId.toString(), published.payload["orderId"].asText())
+        assertEquals(location, published.payload["checkoutUrl"].asText())
+        assertEquals("john@example.com", published.payload["customer"]["email"].asText())
+        assertEquals("John Doe", published.payload["customer"]["name"].asText())
     }
 
     @Test

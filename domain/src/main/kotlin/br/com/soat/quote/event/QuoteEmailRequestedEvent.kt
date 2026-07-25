@@ -8,14 +8,17 @@ class QuoteEmailRequestedEvent(
     val orderId: UUID,
     val customer: Customer,
     val totalAmount: BigDecimal,
-    val lineItems: List<LineItem>,
+    val services: List<Service>,
+    val supplies: List<Supply>,
     val approvalUrl: String,
+    val declineUrl: String,
 ) : DomainEvent() {
 
     override val eventType = QUOTE_EMAIL_REQUESTED
 
     data class Customer(val name: String, val email: String)
-    data class LineItem(val name: String, val price: BigDecimal)
+    data class Service(val name: String, val price: BigDecimal)
+    data class Supply(val name: String, val quantity: Int, val unitPrice: BigDecimal)
 
     companion object {
         const val QUOTE_EMAIL_REQUESTED = "QuoteEmailRequested"

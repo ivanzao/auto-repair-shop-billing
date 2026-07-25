@@ -62,3 +62,4 @@ infra/k8s/overlays/*/tgb-patch.yaml
 # local MP smoke test (never commit)
 .env
 .mp-token
+docs/superpowers/

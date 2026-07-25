@@ -109,7 +109,7 @@ class QuoteListenerUseCaseTest {
     }
 
     @Test
-    fun `saves an approval token and enqueues QuoteEmailRequested with the approval url`() {
+    fun `saves an approval token and enqueues QuoteEmailRequested with both urls`() {
         val req = request()
         useCase.createQuote(req, UUID.randomUUID())
 
@@ -119,8 +119,27 @@ class QuoteListenerUseCaseTest {
         val event = outbox.saved as QuoteEmailRequestedEvent
         assertEquals(req.orderId, event.orderId)
         assertEquals("http://base/v1/quotes/approve?token=${token.id}", event.approvalUrl)
-        assertEquals(2, event.lineItems.size)
+        assertEquals("http://base/v1/quotes/decline?token=${token.id}", event.declineUrl)
         assertEquals(1, publisher.published.size)
+    }
+
+    @Test
+    fun `enqueues QuoteEmailRequested keeping services and supplies apart`() {
+        val req = request()
+        useCase.createQuote(req, UUID.randomUUID())
+
+        val event = outbox.saved as QuoteEmailRequestedEvent
+
+        val service = event.services.single()
+        assertEquals("Oil Change", service.name)
+        assertEquals(0, BigDecimal("100.00").compareTo(service.price))
+
+        val supply = event.supplies.single()
+        assertEquals("Oil Filter", supply.name)
+        assertEquals(2, supply.quantity)
+        assertEquals(0, BigDecimal("30.00").compareTo(supply.unitPrice))
+
+        assertEquals(0, BigDecimal("160.00").compareTo(event.totalAmount))
     }
 
     @Test
