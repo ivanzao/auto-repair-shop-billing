@@ -12,6 +12,7 @@ import br.com.soat.event.EventPublisher
 import br.com.soat.event.OutboxEvent
 import br.com.soat.event.model.DomainEvent
 import br.com.soat.event.repository.OutboxRepository
+import br.com.soat.metric.RecordingMetrics
 import br.com.soat.shared.repository.RepositoryTransactionHandler
 import java.math.BigDecimal
 import java.time.Duration
@@ -21,6 +22,8 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 
 class PaymentUseCaseTest {
+
+    private val metrics = RecordingMetrics()
 
     private class FakeQuoteRepository(seed: Quote) : QuoteRepository {
         val store = mutableMapOf(seed.orderId to seed)
@@ -79,7 +82,7 @@ class PaymentUseCaseTest {
         val publisher = FakePublisher()
         val useCase = PaymentUseCase(
             repo, StubPaymentProvider(details(q.orderId, PaymentState.APPROVED, BigDecimal("209.90"))),
-            outbox, publisher, DirectTransaction,
+            outbox, publisher, DirectTransaction, metrics,
         )
 
         useCase.handlePaymentUpdate("PAY-1")
@@ -91,6 +94,8 @@ class PaymentUseCaseTest {
         assertEquals("PAY-1", event.paymentId)
         assertEquals(0, BigDecimal("209.90").compareTo(event.amount))
         assertEquals(1, publisher.published.size)
+        assertEquals(listOf(PaymentState.APPROVED), metrics.payments)
+        assertEquals(listOf(QuoteStatus.PAID), metrics.quoteStatuses)
     }
 
     @Test
@@ -100,7 +105,7 @@ class PaymentUseCaseTest {
         val outbox = FakeOutbox()
         val useCase = PaymentUseCase(
             repo, StubPaymentProvider(details(q.orderId, PaymentState.REJECTED)),
-            outbox, FakePublisher(), DirectTransaction,
+            outbox, FakePublisher(), DirectTransaction, metrics,
         )
 
         useCase.handlePaymentUpdate("PAY-1")
@@ -110,6 +115,8 @@ class PaymentUseCaseTest {
         assertEquals(q.orderId, event.orderId)
         assertEquals(q.reservationId, event.reservationId)
         assertEquals("payment_rejected", event.reason)
+        assertEquals(listOf(PaymentState.REJECTED), metrics.payments)
+        assertEquals(listOf(QuoteStatus.PAYMENT_FAILED), metrics.quoteStatuses)
     }
 
     @Test
@@ -119,7 +126,7 @@ class PaymentUseCaseTest {
         val outbox = FakeOutbox()
         val useCase = PaymentUseCase(
             repo, StubPaymentProvider(details(q.orderId, PaymentState.PENDING)),
-            outbox, FakePublisher(), DirectTransaction,
+            outbox, FakePublisher(), DirectTransaction, metrics,
         )
 
         useCase.handlePaymentUpdate("PAY-1")
@@ -127,6 +134,8 @@ class PaymentUseCaseTest {
         assertEquals(QuoteStatus.APPROVED, repo.store[q.orderId]!!.status)
         assertEquals(0, repo.updates)
         assertNull(outbox.saved)
+        assertEquals(listOf(PaymentState.PENDING), metrics.payments)
+        assertEquals(emptyList<QuoteStatus>(), metrics.quoteStatuses)
     }
 
     @Test
@@ -136,13 +145,14 @@ class PaymentUseCaseTest {
         val publisher = FakePublisher()
         val useCase = PaymentUseCase(
             repo, StubPaymentProvider(details(q.orderId, PaymentState.APPROVED)),
-            FakeOutbox(), publisher, DirectTransaction,
+            FakeOutbox(), publisher, DirectTransaction, metrics,
         )
 
         useCase.handlePaymentUpdate("PAY-1")
 
         assertEquals(0, repo.updates)
         assertEquals(0, publisher.published.size)
+        assertEquals(emptyList<PaymentState>(), metrics.payments, "quote terminal nao gera metrica de pagamento")
     }
 
     @Test
@@ -150,7 +160,7 @@ class PaymentUseCaseTest {
         val q = quote(status = QuoteStatus.PAID)
         val repo = FakeQuoteRepository(q)
         val provider = StubPaymentProvider()
-        val useCase = PaymentUseCase(repo, provider, FakeOutbox(), FakePublisher(), DirectTransaction)
+        val useCase = PaymentUseCase(repo, provider, FakeOutbox(), FakePublisher(), DirectTransaction, metrics)
 
         useCase.refundPayment(q.orderId, "PAY-1")
 
@@ -163,7 +173,7 @@ class PaymentUseCaseTest {
         val q = quote(status = QuoteStatus.REFUNDED)
         val repo = FakeQuoteRepository(q)
         val provider = StubPaymentProvider()
-        val useCase = PaymentUseCase(repo, provider, FakeOutbox(), FakePublisher(), DirectTransaction)
+        val useCase = PaymentUseCase(repo, provider, FakeOutbox(), FakePublisher(), DirectTransaction, metrics)
 
         useCase.refundPayment(q.orderId, "PAY-1")
 

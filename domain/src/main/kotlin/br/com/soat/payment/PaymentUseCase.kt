@@ -7,6 +7,7 @@ import br.com.soat.quote.event.PaymentFailedEvent
 import br.com.soat.quote.repository.QuoteRepository
 import br.com.soat.event.EventPublisher
 import br.com.soat.event.repository.OutboxRepository
+import br.com.soat.metric.MetricsPort
 import br.com.soat.shared.repository.RepositoryTransactionHandler
 import java.util.UUID
 import net.logstash.logback.argument.StructuredArguments.kv
@@ -18,6 +19,7 @@ class PaymentUseCase(
     private val outbox: OutboxRepository,
     private val eventPublisher: EventPublisher,
     private val tx: RepositoryTransactionHandler,
+    private val metrics: MetricsPort,
 ) {
     private val logger = LoggerFactory.getLogger(PaymentUseCase::class.java)
 
@@ -39,6 +41,8 @@ class PaymentUseCase(
                     outbox.save(PaymentConfirmedEvent(quote.orderId, paymentId, details.amount))
                 }
                 eventPublisher.publish(event)
+                metrics.paymentSettled(PaymentState.APPROVED)
+                metrics.quoteStatusChanged(QuoteStatus.PAID)
                 logger.info("Payment confirmed", kv("orderId", quote.orderId), kv("paymentId", paymentId))
             }
 
@@ -48,11 +52,15 @@ class PaymentUseCase(
                     outbox.save(PaymentFailedEvent(quote.orderId, quote.reservationId, "payment_rejected"))
                 }
                 eventPublisher.publish(event)
+                metrics.paymentSettled(PaymentState.REJECTED)
+                metrics.quoteStatusChanged(QuoteStatus.PAYMENT_FAILED)
                 logger.info("Payment failed", kv("orderId", quote.orderId), kv("paymentId", paymentId))
             }
 
-            PaymentState.PENDING ->
+            PaymentState.PENDING -> {
+                metrics.paymentSettled(PaymentState.PENDING)
                 logger.info("Payment pending; awaiting next notification", kv("paymentId", paymentId))
+            }
         }
     }
 

@@ -26,6 +26,9 @@ import br.com.soat.event.EventPublisher
 import br.com.soat.event.OutboxEventPostgresRepository
 import br.com.soat.event.repository.OutboxRepository
 import br.com.soat.idempotency.IdempotencyPostgresRepository
+import br.com.soat.metric.MeteredPaymentProvider
+import br.com.soat.metric.MetricsPort
+import br.com.soat.metric.MicrometerMetricsPort
 import br.com.soat.producer.EventEnvelopeSerializer
 import br.com.soat.producer.OutboxRelay
 import br.com.soat.producer.SnsClient
@@ -83,6 +86,7 @@ val applicationModule = module {
 
     single<PrometheusMeterRegistry> { prometheusMeterRegistry() }
     single<MeterRegistry> { get<PrometheusMeterRegistry>() }
+    single<MetricsPort> { MicrometerMetricsPort(get<MeterRegistry>()) }
 
     single {
         val cfg = get<Config>()
@@ -116,12 +120,13 @@ val applicationModule = module {
             tx = get(),
             baseUrl = cfg.getString("app.base_url"),
             approvalTtlDays = cfg.getStringOrNull("quote.approval.ttl_days")?.toLong() ?: 5L,
+            metrics = get(),
         )
     }
     single { SuppliesReservedHandler(get()) } bind InboundEventHandler::class
 
     single { QuoteApprovalUseCase(get(), get(), get(), get(), get(), get()) }
-    single { PaymentUseCase(get(), get(), get(), get(), get()) }
+    single { PaymentUseCase(get(), get(), get(), get(), get(), get()) }
     single { ExecutionFailedHandler(get()) } bind InboundEventHandler::class
     single<WebhookSignatureValidator> {
         MercadoPagoSignatureValidator(get<Config>().getStringOrNull("mercadopago.webhook_secret") ?: "")
@@ -130,12 +135,15 @@ val applicationModule = module {
     single { HttpClient(CIO) }
     single<PaymentProviderPort> {
         val cfg = get<Config>()
-        MercadoPagoPaymentAdapter(
-            client = get(),
-            apiUrl = cfg.getString("mercadopago.api_url"),
-            accessToken = cfg.getString("mercadopago.access_token"),
-            backUrlBase = cfg.getString("app.base_url"),
-            mapper = get(),
+        MeteredPaymentProvider(
+            delegate = MercadoPagoPaymentAdapter(
+                client = get(),
+                apiUrl = cfg.getString("mercadopago.api_url"),
+                accessToken = cfg.getString("mercadopago.access_token"),
+                backUrlBase = cfg.getString("app.base_url"),
+                mapper = get(),
+            ),
+            metrics = get(),
         )
     }
 

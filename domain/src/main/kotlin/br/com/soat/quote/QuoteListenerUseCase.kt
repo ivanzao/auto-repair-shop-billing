@@ -6,6 +6,7 @@ import br.com.soat.quote.repository.QuoteApprovalTokenRepository
 import br.com.soat.quote.repository.QuoteRepository
 import br.com.soat.event.EventPublisher
 import br.com.soat.event.repository.OutboxRepository
+import br.com.soat.metric.MetricsPort
 import br.com.soat.shared.repository.IdempotencyRepository
 import br.com.soat.shared.repository.RepositoryTransactionHandler
 import java.math.BigDecimal
@@ -23,6 +24,7 @@ class QuoteListenerUseCase(
     private val tx: RepositoryTransactionHandler,
     private val baseUrl: String,
     private val approvalTtlDays: Long,
+    private val metrics: MetricsPort,
 ) {
     private val logger = LoggerFactory.getLogger(QuoteListenerUseCase::class.java)
 
@@ -69,6 +71,7 @@ class QuoteListenerUseCase(
             )
         }
         eventPublisher.publish(event)
+        metrics.quoteCreated()
 
         logger.info(
             "Quote created and QuoteEmailRequested enqueued",

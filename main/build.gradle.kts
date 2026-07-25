@@ -32,6 +32,7 @@ dependencies {
     implementation(project(":consumer"))
     implementation(project(":producer"))
     implementation(project(":payment"))
+    implementation(project(":metric"))
 
     implementation(libs.kotlinx.coroutines.core)
 

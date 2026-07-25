@@ -9,6 +9,7 @@ import br.com.soat.event.OutboxEvent
 import br.com.soat.event.model.DomainEvent
 import br.com.soat.event.repository.OutboxRepository
 import br.com.soat.shared.repository.IdempotencyRepository
+import br.com.soat.metric.RecordingMetrics
 import br.com.soat.shared.repository.RepositoryTransactionHandler
 import java.math.BigDecimal
 import java.time.Duration
@@ -66,9 +67,11 @@ class QuoteListenerUseCaseTest {
     private val publisher = FakePublisher()
     private val idempotency = FakeIdempotency()
 
+    private val metrics = RecordingMetrics()
+
     private val useCase = QuoteListenerUseCase(
         quoteRepository, tokenRepository, outbox, publisher, idempotency, DirectTransaction,
-        baseUrl = "http://base", approvalTtlDays = 5,
+        baseUrl = "http://base", approvalTtlDays = 5, metrics = metrics,
     )
 
     private fun request(orderId: UUID = UUID.randomUUID()) = RegisterQuoteRequest(
@@ -140,5 +143,16 @@ class QuoteListenerUseCaseTest {
         assertEquals(1, quoteRepository.saves)
         assertNotNull(quoteRepository.store[req.orderId])
         assertTrue(publisher.published.size == 1)
+    }
+
+    @Test
+    fun `counts a created quote once and never on the idempotent replay`() {
+        val req = request()
+        val idempotencyId = UUID.randomUUID()
+
+        useCase.createQuote(req, idempotencyId)
+        useCase.createQuote(req, idempotencyId)
+
+        assertEquals(1, metrics.quotesCreated)
     }
 }
