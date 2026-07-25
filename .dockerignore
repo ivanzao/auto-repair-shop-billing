@@ -3,6 +3,7 @@
 .gradle
 build
 */build
+!*/build/libs/application.jar
 docs
 infra
 docker-compose.yaml

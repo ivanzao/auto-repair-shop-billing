@@ -61,7 +61,7 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/auto_repair_shop_billing_local
       DATABASE_USERNAME: app_billing_local
       DATABASE_PASSWORD: changeme
-      APP_BASE_URL: http://localhost:8080
+      APP_BASE_URL: "${APP_BASE_URL:-http://localhost:8080}"
       AWS_ENDPOINT: http://localstack:4566
       AWS_REGION: us-east-1
       AWS_ACCESS_KEY_ID: test

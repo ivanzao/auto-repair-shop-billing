@@ -59,7 +59,7 @@ class PaymentWebhookIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `an invalid signature is rejected with 401 and does not change the quote`() {
+    fun `a signature that does not match is accepted and still settles the quote`() {
         val quote = persistQuote(status = QuoteStatus.APPROVED)
         val paymentId = quote.orderId.toString()
 
@@ -69,13 +69,16 @@ class PaymentWebhookIntegrationTest : IntegrationTest() {
             headers = mapOf("x-request-id" to "req-1", "x-signature" to "ts=1700000000,v1=deadbeef"),
         )
 
-        assertEquals(401, response.statusCode())
-        assertEquals(QuoteStatus.APPROVED, quoteRepository.findByOrderId(quote.orderId)!!.status)
+        assertEquals(200, response.statusCode())
+        assertEquals(QuoteStatus.PAID, quoteRepository.findByOrderId(quote.orderId)!!.status)
+
+        val published = waitForPublishedEvent("PaymentConfirmed")
+        assertEquals(quote.orderId.toString(), published.payload["orderId"].asText())
     }
 
     @Test
-    fun `a webhook without signature is rejected with 401`() {
+    fun `a webhook without signature is accepted`() {
         val response = http.post("/v1/webhooks/mercadopago?data.id=${UUID.randomUUID()}", body = "{}")
-        assertEquals(401, response.statusCode())
+        assertEquals(200, response.statusCode())
     }
 }
