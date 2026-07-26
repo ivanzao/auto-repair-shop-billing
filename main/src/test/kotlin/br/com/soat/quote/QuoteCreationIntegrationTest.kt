@@ -17,21 +17,18 @@ class QuoteCreationIntegrationTest : IntegrationTest() {
     private val tokenRepository: QuoteApprovalTokenRepository by lazy { get<QuoteApprovalTokenRepository>() }
 
     @Test
-    fun `SuppliesReserved creates a pending quote and publishes QuoteEmailRequested`() {
-        val orderId = UUID.randomUUID()
-        val reservationId = UUID.randomUUID()
-
-        sendSagaMessage(suppliesReservedEnvelope(orderId, reservationId), "SuppliesReserved")
+    fun `OrderAwaitingApproval creates a pending quote and publishes QuoteEmailRequested`() {
+        sendSagaMessage(orderAwaitingApprovalEnvelope(), "OrderAwaitingApproval")
 
         val published = waitForPublishedEvent("QuoteEmailRequested")
-        assertEquals(orderId.toString(), published.payload["orderId"].asText())
+        assertEquals(CONTRACT_ORDER_ID.toString(), published.payload["orderId"].asText())
         val services = published.payload["services"]
         assertEquals(1, services.size())
-        assertEquals("Oil Change", services[0]["name"].asText())
+        assertEquals("Troca de oleo", services[0]["name"].asText())
 
         val supplies = published.payload["supplies"]
         assertEquals(1, supplies.size())
-        assertEquals("Oil Filter", supplies[0]["name"].asText())
+        assertEquals("Filtro de oleo", supplies[0]["name"].asText())
         assertEquals(2, supplies[0]["quantity"].asInt())
         assertEquals(0, BigDecimal("30.00").compareTo(supplies[0]["unitPrice"].decimalValue()))
 
@@ -46,8 +43,8 @@ class QuoteCreationIntegrationTest : IntegrationTest() {
             "os dois links têm que usar o mesmo token",
         )
 
-        val quote = quoteRepository.findByOrderId(orderId)!!
-        assertEquals(reservationId, quote.reservationId)
+        val quote = quoteRepository.findByOrderId(CONTRACT_ORDER_ID)!!
+        assertEquals(CONTRACT_RESERVATION_ID, quote.reservationId)
         assertEquals(QuoteStatus.PENDING_APPROVAL, quote.status)
         assertEquals(2, quote.lineItems.size)
         assertEquals(0, BigDecimal("160.00").compareTo(quote.totalAmount))
@@ -57,19 +54,17 @@ class QuoteCreationIntegrationTest : IntegrationTest() {
     }
 
     @Test
-    fun `a redelivered SuppliesReserved does not create a second quote`() {
-        val orderId = UUID.randomUUID()
-        val reservationId = UUID.randomUUID()
-        val envelope = suppliesReservedEnvelope(orderId, reservationId)
+    fun `a redelivered OrderAwaitingApproval does not create a second quote`() {
+        val envelope = orderAwaitingApprovalEnvelope()
 
-        sendSagaMessage(envelope, "SuppliesReserved")
-        sendSagaMessage(envelope, "SuppliesReserved")
+        sendSagaMessage(envelope, "OrderAwaitingApproval")
+        sendSagaMessage(envelope, "OrderAwaitingApproval")
 
         waitForPublishedEvent("QuoteEmailRequested")
-        await { quoteRepository.findByOrderId(orderId) != null }
+        await { quoteRepository.findByOrderId(CONTRACT_ORDER_ID) != null }
 
         Thread.sleep(1500)
-        assertEquals(QuoteStatus.PENDING_APPROVAL, quoteRepository.findByOrderId(orderId)!!.status)
+        assertEquals(QuoteStatus.PENDING_APPROVAL, quoteRepository.findByOrderId(CONTRACT_ORDER_ID)!!.status)
         assertEquals(0, sagaQueueDepth())
     }
 }

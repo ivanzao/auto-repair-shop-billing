@@ -7,11 +7,11 @@ import br.com.soat.consumer.EventType
 import br.com.soat.consumer.InboundEventHandler
 import java.util.UUID
 
-class SuppliesReservedHandler(
+class OrderAwaitingApprovalHandler(
     private val quoteListenerUseCase: QuoteListenerUseCase,
 ) : InboundEventHandler {
 
-    override val eventTypes = setOf(EventType.SUPPLIES_RESERVED)
+    override val eventTypes = setOf(EventType.ORDER_AWAITING_APPROVAL)
 
     override fun handle(envelope: EventEnvelope) {
         val payload = envelope.payload

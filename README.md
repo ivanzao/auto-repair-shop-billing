@@ -1,7 +1,8 @@
 # Auto Repair Shop — Billing
 
-Microsserviço de **billing** (orçamento e pagamento) da Fase 4 do Auto Repair Shop. Recebe a
-reserva já priced da execução, gera o orçamento, coleta a aprovação do cliente por link de
+Microsserviço de **billing** (orçamento e pagamento) da Fase 4 do Auto Repair Shop. Recebe do
+order a OS já precificada e com a reserva de insumos, gera o orçamento, coleta a aprovação do
+cliente por link de
 e-mail, integra o **Mercado Pago** (preferência de checkout + webhook + estorno) e participa da
 saga coreografada publicando os eventos de resultado.
 
@@ -18,7 +19,7 @@ storage/   billing/**            (Quotes, QuoteApprovalTokens + repositórios Po
            event/, idempotency/  (outbox + dedup)
            db/migration/**       (V1 events, V2 idempotency, V3 shedlock, V4 quotes, V5 tokens)
 api/       billing/**            (QuoteRoutes: approve/decline; WebhookRoutes: mercadopago)
-consumer/  **                    (InboundEventConsumer + handlers SuppliesReserved/ExecutionFailed)
+consumer/  **                    (InboundEventConsumer + handlers OrderAwaitingApproval/ExecutionFailed)
 producer/  **                    (outbox → SNS com envelope do contrato)
 payment/   **                    (MercadoPagoPaymentAdapter, FakePaymentProvider, assinatura)
 worker/    scheduler/**          (ShedLock + OutboxRelayTask)
@@ -36,7 +37,7 @@ orquestrador central.
 
 | eventType | efeito |
 |---|---|
-| `SuppliesReserved` (de execution) | cria a `Quote` priced (persiste `reservationId`), gera token e enfileira `QuoteEmailRequested` |
+| `OrderAwaitingApproval` (de order) | cria a `Quote` priced (persiste `reservationId`), gera token e enfileira `QuoteEmailRequested` |
 | `ExecutionFailed` (de execution) | estorna o pagamento via Mercado Pago e marca a `Quote` `REFUNDED` |
 
 **Produz** (tópico `auto-repair-shop-billing-events`, envelope + attribute `eventType`):
@@ -53,7 +54,7 @@ O link `/approve` cria a preferência no Mercado Pago, redireciona 302 ao checko
 `QuoteApproved` com o `checkoutUrl`, para que a Lambda de e-mail mande o link de pagamento — o
 caminho durável para quem abandona a aba do checkout.
 
-Fluxo feliz: `SuppliesReserved` → `QuoteEmailRequested` → (cliente aprova → `QuoteApproved`
+Fluxo feliz: `OrderAwaitingApproval` → `QuoteEmailRequested` → (cliente aprova → `QuoteApproved`
 → checkout MP) → webhook → `PaymentConfirmed`.
 
 Contrato completo: `auto-repair-shop-infra/docs/saga-event-contract.md`.
