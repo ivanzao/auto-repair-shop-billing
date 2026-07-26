@@ -21,7 +21,7 @@ import br.com.soat.consumer.InboundEventHandler
 import br.com.soat.consumer.MessageQueue
 import br.com.soat.consumer.SqsClient
 import br.com.soat.consumer.handler.ExecutionFailedHandler
-import br.com.soat.consumer.handler.SuppliesReservedHandler
+import br.com.soat.consumer.handler.OrderAwaitingApprovalHandler
 import br.com.soat.event.EventPublisher
 import br.com.soat.event.OutboxEventPostgresRepository
 import br.com.soat.event.repository.OutboxRepository
@@ -123,7 +123,7 @@ val applicationModule = module {
             metrics = get(),
         )
     }
-    single { SuppliesReservedHandler(get()) } bind InboundEventHandler::class
+    single { OrderAwaitingApprovalHandler(get()) } bind InboundEventHandler::class
 
     single { QuoteApprovalUseCase(get(), get(), get(), get(), get(), get()) }
     single { PaymentUseCase(get(), get(), get(), get(), get(), get()) }

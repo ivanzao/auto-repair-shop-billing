@@ -34,10 +34,10 @@ class InboundEventConsumerTest {
     fun `fans out to the matching handler and deletes the message`() {
         val handled = mutableListOf<UUID>()
         val handler = object : InboundEventHandler {
-            override val eventTypes = setOf(EventType.SUPPLIES_RESERVED)
+            override val eventTypes = setOf(EventType.ORDER_AWAITING_APPROVAL)
             override fun handle(envelope: EventEnvelope) { handled += envelope.eventId }
         }
-        val queue = FakeQueue(listOf(Message(envelopeJson(EventType.SUPPLIES_RESERVED), "rh-1")))
+        val queue = FakeQueue(listOf(Message(envelopeJson(EventType.ORDER_AWAITING_APPROVAL), "rh-1")))
 
         consumer(queue, listOf(handler)).poll()
 
@@ -76,10 +76,10 @@ class InboundEventConsumerTest {
     @Test
     fun `does not delete a message whose handler failed`() {
         val handler = object : InboundEventHandler {
-            override val eventTypes = setOf(EventType.SUPPLIES_RESERVED)
+            override val eventTypes = setOf(EventType.ORDER_AWAITING_APPROVAL)
             override fun handle(envelope: EventEnvelope): Unit = throw RuntimeException("boom")
         }
-        val queue = FakeQueue(listOf(Message(envelopeJson(EventType.SUPPLIES_RESERVED), "rh-4")))
+        val queue = FakeQueue(listOf(Message(envelopeJson(EventType.ORDER_AWAITING_APPROVAL), "rh-4")))
 
         consumer(queue, listOf(handler)).poll()
 

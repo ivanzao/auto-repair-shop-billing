@@ -31,7 +31,7 @@ class QuoteListenerUseCase(
     fun createQuote(request: RegisterQuoteRequest, idempotencyId: UUID) {
         if (idempotency.exists(request.orderId, idempotencyId)) {
             logger.info(
-                "Skipping already-processed SuppliesReserved",
+                "Skipping already-processed OrderAwaitingApproval",
                 kv("orderId", request.orderId), kv("idempotencyId", idempotencyId),
             )
             return
