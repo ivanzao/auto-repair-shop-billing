@@ -22,8 +22,6 @@ tags:
     description: "Health check da aplicação"
   - name: Quote
     description: "Aprovação e recusa de orçamentos pelo cliente"
-  - name: Payment
-    description: "Integração com o Mercado Pago"
 
 paths:
   /health:
@@ -164,87 +162,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /v1/webhooks/mercadopago:
-    post:
-      tags:
-        - Payment
-      summary: "Webhook de notificação do Mercado Pago"
-      description: |
-        Recebe as notificações de mudança de status de pagamento do Mercado Pago.
-
-        O corpo da requisição é lido mas não é utilizado: o identificador do
-        pagamento vem do query parameter `data.id` (ou `id`, dependendo do tipo de
-        notificação), e o billing consulta a API do Mercado Pago para obter o
-        status real. Essa consulta ativa evita confiar em um corpo que poderia ser
-        forjado.
-
-        A requisição é autenticada pela assinatura HMAC nos headers `x-signature` e
-        `x-request-id`. Assinatura inválida ou ausente resulta em 401, sem
-        processamento.
-
-        Confirmado o pagamento, o billing publica `PaymentConfirmed`; recusado,
-        publica `PaymentFailed`, que dispara compensação na saga.
-      parameters:
-        - name: data.id
-          in: query
-          required: false
-          description: "Identificador do pagamento no Mercado Pago. Alternativa: `id`."
-          schema:
-            type: string
-          example: "1234567890"
-        - name: id
-          in: query
-          required: false
-          description: "Identificador do pagamento, usado quando `data.id` não vem na notificação"
-          schema:
-            type: string
-        - name: type
-          in: query
-          required: false
-          description: |
-            Tipo da notificação. Só `payment` é processado; qualquer outro valor é
-            respondido com 200 e descartado. Alternativa: `topic`.
-          schema:
-            type: string
-          example: "payment"
-        - name: topic
-          in: query
-          required: false
-          description: "Tipo da notificação, usado quando `type` não vem na notificação"
-          schema:
-            type: string
-          example: "payment"
-        - name: x-signature
-          in: header
-          required: false
-          description: "Assinatura HMAC da notificação, no formato `ts=<timestamp>,v1=<hash>`"
-          schema:
-            type: string
-        - name: x-request-id
-          in: header
-          required: false
-          description: "Identificador da requisição, usado na composição da assinatura"
-          schema:
-            type: string
-      requestBody:
-        required: false
-        description: "Corpo da notificação do Mercado Pago. Lido, mas não utilizado."
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-            example:
-              action: "payment.updated"
-              type: "payment"
-              data:
-                id: "1234567890"
-      responses:
-        "200":
-          description: "Notificação processada"
-        "401":
-          description: "Assinatura inválida, ausente, ou identificador do pagamento ausente"
 
 components:
   schemas:
