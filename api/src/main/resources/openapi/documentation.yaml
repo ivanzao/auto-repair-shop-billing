@@ -199,15 +199,31 @@ paths:
           description: "Identificador do pagamento, usado quando `data.id` não vem na notificação"
           schema:
             type: string
+        - name: type
+          in: query
+          required: false
+          description: |
+            Tipo da notificação. Só `payment` é processado; qualquer outro valor é
+            respondido com 200 e descartado. Alternativa: `topic`.
+          schema:
+            type: string
+          example: "payment"
+        - name: topic
+          in: query
+          required: false
+          description: "Tipo da notificação, usado quando `type` não vem na notificação"
+          schema:
+            type: string
+          example: "payment"
         - name: x-signature
           in: header
-          required: true
+          required: false
           description: "Assinatura HMAC da notificação, no formato `ts=<timestamp>,v1=<hash>`"
           schema:
             type: string
         - name: x-request-id
           in: header
-          required: true
+          required: false
           description: "Identificador da requisição, usado na composição da assinatura"
           schema:
             type: string
