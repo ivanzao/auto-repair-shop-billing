@@ -1,46 +1,24 @@
-# Auto Repair Shop — Billing
+# auto-repair-shop-billing
 
-Microsserviço de **billing** (orçamento e pagamento) da Fase 4 do Auto Repair Shop. Recebe do
-order a OS já precificada e com a reserva de insumos, gera o orçamento, coleta a aprovação do
-cliente por link de
-e-mail, integra o **Mercado Pago** (preferência de checkout + webhook + estorno) e participa da
-saga coreografada publicando os eventos de resultado.
+Microsserviço **billing** do Auto Repair Shop: gera o orçamento a partir da OS já precificada,
+coleta a aprovação do cliente por link de e-mail, integra o **Mercado Pago** (preferência de
+checkout, webhook e estorno) e publica os eventos de resultado na saga. Kotlin/Ktor sobre
+PostgreSQL, com RDS próprio.
 
-Greenfield derivado do esqueleto do serviço `order` (mesma stack e convenções). RDS Postgres
-próprio.
+## Arquitetura
 
-## Estrutura de Pastas
-
-```
-domain/    billing/quote/**      (Quote, QuoteApprovalToken, use cases, eventos, ports)
-           billing/payment/**    (PaymentProviderPort, WebhookSignatureValidator, PaymentUseCase)
-           event/**, shared/**   (infra reusada: outbox, idempotência, transação)
-storage/   billing/**            (Quotes, QuoteApprovalTokens + repositórios Postgres)
-           event/, idempotency/  (outbox + dedup)
-           db/migration/**       (V1 events, V2 idempotency, V3 shedlock, V4 quotes, V5 tokens)
-api/       billing/**            (QuoteRoutes: approve/decline; WebhookRoutes: mercadopago)
-consumer/  **                    (InboundEventConsumer + handlers OrderAwaitingApproval/ExecutionFailed)
-producer/  **                    (outbox → SNS com envelope do contrato)
-payment/   **                    (MercadoPagoPaymentAdapter, FakePaymentProvider, assinatura)
-worker/    scheduler/**          (ShedLock + OutboxRelayTask)
-main/      **                    (Koin wiring, Ktor server, config)
-infra/k8s/ base + overlays/**    (Kustomize: NodePort 30081, ESO do Mercado Pago)
-```
-
-## Arquitetura — papel na saga (coreografia, sem orquestrador)
-
-Comunicação 100% assíncrona (SNS→SQS, envelope do contrato). REST só para o link de aprovação
-e o webhook do Mercado Pago. O estado é derivado por serviço (status da `Quote`), sem
+Comunicação 100% assíncrona (SNS para SQS, envelope do contrato). REST só para o link de
+aprovação e o webhook do Mercado Pago. O estado é derivado por serviço (status da `Quote`), sem
 orquestrador central.
 
-**Consome** (fila `auto-repair-shop-billing-queue`, dispatch por `eventType`, ignora o resto):
+**Consome** (fila `auto-repair-shop-billing-queue-{env}`, dispatch por `eventType`, ignora o resto):
 
 | eventType | efeito |
 |---|---|
 | `OrderAwaitingApproval` (de order) | cria a `Quote` priced (persiste `reservationId`), gera token e enfileira `QuoteEmailRequested` |
 | `ExecutionFailed` (de execution) | estorna o pagamento via Mercado Pago e marca a `Quote` `REFUNDED` |
 
-**Produz** (tópico `auto-repair-shop-billing-events`, envelope + attribute `eventType`):
+**Produz** (tópico `auto-repair-shop-billing-events-{env}`, envelope + attribute `eventType`):
 
 | eventType | gatilho |
 |---|---|
@@ -48,10 +26,10 @@ orquestrador central.
 | `QuoteApproved` | link `/approve`: preferência criada no MP, leva o `checkoutUrl` ao e-mail |
 | `PaymentConfirmed` | webhook MP: pagamento aprovado |
 | `QuoteRejected` | link `/decline` |
-| `PaymentFailed` | webhook MP: pagamento recusado/expirado |
+| `PaymentFailed` | webhook MP: pagamento recusado ou expirado |
 
 O link `/approve` cria a preferência no Mercado Pago, redireciona 302 ao checkout e publica
-`QuoteApproved` com o `checkoutUrl`, para que a Lambda de e-mail mande o link de pagamento — o
+`QuoteApproved` com o `checkoutUrl`, para que a Lambda de e-mail mande o link de pagamento. É o
 caminho durável para quem abandona a aba do checkout.
 
 Fluxo feliz: `OrderAwaitingApproval` → `QuoteEmailRequested` → (cliente aprova → `QuoteApproved`
@@ -66,18 +44,36 @@ Contrato completo: `auto-repair-shop-infra/docs/saga-event-contract.md`.
   e `traceparent` (W3C).
 - **Idempotência**: dedup por `(orderId, eventId)` na tabela `idempotency`; handlers também são
   idempotentes por estado da `Quote` (transições terminais não reprocessam).
-- **Outbox**: mudança de estado + evento gravados na mesma transação (`events`); `SnsEventPublisher`
-  publica e o `OutboxRelayTask` (ShedLock) reprocessa pendentes.
+- **Outbox**: mudança de estado e evento gravados na mesma transação (`events`); o
+  `SnsEventPublisher` publica e o `OutboxRelayTask` (ShedLock) reprocessa pendentes.
 
 ## Integração Mercado Pago
 
-- **Preferência**: `POST /checkout/preferences` na aprovação (Checkout Pro) → redirect 302 ao
+- **Preferência**: `POST /checkout/preferences` na aprovação (Checkout Pro), com redirect 302 ao
   `init_point`.
 - **Webhook**: `POST /v1/webhooks/mercadopago` valida a assinatura `x-signature` (HMAC-SHA256),
-  consulta o pagamento e emite `PaymentConfirmed`/`PaymentFailed`.
+  consulta o pagamento e emite `PaymentConfirmed` ou `PaymentFailed`.
 - **Estorno**: `POST /v1/payments/{id}/refunds` ao consumir `ExecutionFailed`.
-- **Fake**: quando `MERCADOPAGO_ACCESS_TOKEN` está vazio (local/hml/testes), usa
-  `FakePaymentProvider` (sem chamadas externas).
+- **Fake**: quando `MERCADOPAGO_ACCESS_TOKEN` está vazio (local, hml e testes), usa
+  `FakePaymentProvider`, sem chamadas externas.
+
+## Estrutura de Pastas
+
+```
+domain/    billing/quote/**      (Quote, QuoteApprovalToken, use cases, eventos, ports)
+           billing/payment/**    (PaymentProviderPort, WebhookSignatureValidator, PaymentUseCase)
+           event/**, shared/**   (infra reusada: outbox, idempotência, transação)
+storage/   billing/**            (Quotes, QuoteApprovalTokens + repositórios Postgres)
+           event/, idempotency/  (outbox + dedup)
+           db/migration/**       (V1 events, V2 idempotency, V3 shedlock, V4 quotes, V5 tokens)
+api/       billing/**            (QuoteRoutes: approve/decline; WebhookRoutes: mercadopago)
+consumer/  **                    (InboundEventConsumer + handlers OrderAwaitingApproval/ExecutionFailed)
+producer/  **                    (outbox para SNS com envelope do contrato)
+payment/   **                    (MercadoPagoPaymentAdapter, FakePaymentProvider, assinatura)
+worker/    scheduler/**          (ShedLock + OutboxRelayTask)
+main/      **                    (Koin wiring, Ktor server, config)
+infra/k8s/ base + overlays/**    (Kustomize, ESO do Mercado Pago)
+```
 
 ## Stack
 
@@ -93,7 +89,7 @@ AWS SDK Kotlin (sns+sqs) · Ktor client (Mercado Pago) · JUnit5 + MockK + Testc
 docker compose up --build
 ```
 
-Sobe Postgres, LocalStack (SNS+SQS, com tópico/fila do billing provisionados) e a aplicação em
+Sobe Postgres, LocalStack (SNS+SQS, com tópico e fila do billing provisionados) e a aplicação em
 `http://localhost:8080` (`/health`, `/metrics`). Sem `MERCADOPAGO_ACCESS_TOKEN`, o provedor fake é
 usado.
 
@@ -107,44 +103,48 @@ usado.
 ## Testes
 
 ```bash
-./gradlew test                    # unit (todos os módulos)
-./gradlew integrationTest         # integração (Testcontainers: Postgres + LocalStack) — requer Docker
+./gradlew test                    # unitários (todos os módulos)
+./gradlew integrationTest         # integração (Testcontainers: Postgres + LocalStack), requer Docker
 ./gradlew jacocoAggregatedReport  # relatório em build/reports/jacoco/...
 ```
 
-Os fluxos de saga são exercitados fim-a-fim nos testes de integração do `main`
+Os fluxos de saga são exercitados fim a fim nos testes de integração do `main`
 (`QuoteCreationIntegrationTest`, `QuoteApprovalIntegrationTest`, `PaymentWebhookIntegrationTest`,
 `ExecutionFailedIntegrationTest`), dirigidos pela fila SQS e pelo HTTP.
 
 ### Cobertura
 
-| Métrica | Valor |
-|---|---|
-| Cobertura (SonarCloud) | **89.6%** |
-| Testes | 33 |
-| Quality gate | Passed |
+![Cobertura no SonarCloud](docs/img/sonarcloud-coverage.png)
 
-Análise a cada PR pelo step `Sonar` do `pr-check.yaml`, no projeto
-`auto-repair-shop-billing` da organização `ivanzao` no SonarCloud. O quality gate
-exige 80% de cobertura em código novo.
+Análise a cada PR pelo step `Sonar` do `pr-check.yaml`, no projeto `auto-repair-shop-billing`
+da organização `ivanzao`. O quality gate exige 80% de cobertura em código novo.
 
-Ficam fora da contagem de cobertura o wiring de framework (`config`, `auth`,
-`metric`), o módulo `main` e os DTOs — código sem lógica de negócio própria. Eles
-seguem analisados para bugs, code smells e security hotspots.
+Ficam fora da contagem o wiring de framework (`config`, `auth`, `metric`), o módulo `main` e os
+DTOs, código sem lógica de negócio própria, ainda analisado para bugs e code smells.
 
-<!-- TODO: print do dashboard do SonarCloud (projeto é privado, link exige login) -->
+## API
 
-## Deploy em Kubernetes (Kustomize)
+- **Swagger UI**: `GET /swagger` (execução local)
+- **Spec**: `api/src/main/resources/openapi/documentation.yaml`
+- **Rotas públicas**: `GET /v1/quotes/approve` e `GET /v1/quotes/decline`. O cliente chega por
+  link de e-mail, sem token
+- **Health**: `/health` · **Metrics**: `/metrics`
+
+`POST /v1/webhooks/mercadopago` fica **fora do spec** de propósito: é integração inbound do
+Mercado Pago, não API de cliente.
+
+## Deploy em Kubernetes
 
 ```bash
 kubectl apply -k infra/k8s/overlays/hml    # namespace auto-repair-shop-hml
 kubectl apply -k infra/k8s/overlays/prod   # namespace auto-repair-shop-prod
 ```
 
-- Service `NodePort 30081`, container `8080`.
-- `MERCADOPAGO_ACCESS_TOKEN`/`WEBHOOK_SECRET` vêm do **External Secrets Operator** (ESO), do
-  secret `auto-repair-shop/{env}/mercadopago`. `DATABASE_PASSWORD` do secret `billing-secret`
-  (criado pelo CI). Demais valores no `billing-config` (patched no deploy).
+- Container `8080`. O NodePort do Service vem do SSM (`/auto-repair-shop/{env}/billing/node-port`)
+  e é aplicado pelo CI.
+- `MERCADOPAGO_ACCESS_TOKEN` e `WEBHOOK_SECRET` vêm do **External Secrets Operator**, do secret
+  `auto-repair-shop/{env}/mercadopago`. `DATABASE_PASSWORD` vem do secret `billing-secret`, criado
+  pelo CI. Os demais valores ficam no `billing-config`, reescrito no deploy.
 
 ### Contrato de integração via SSM (consumido pelo CI)
 
@@ -153,17 +153,23 @@ kubectl apply -k infra/k8s/overlays/prod   # namespace auto-repair-shop-prod
 | `/auto-repair-shop/{env}/eks/cluster-name` | cluster EKS |
 | `/auto-repair-shop/{env}/billing/db/secret-arn` | credenciais do RDS |
 | `/auto-repair-shop/{env}/sns/billing-events-topic-arn` | tópico produtor |
-| `/auto-repair-shop/{env}/sqs/billing-saga-queue-url` | fila consumidora |
-| `/auto-repair-shop/{env}/apigw/endpoint` | `APP_BASE_URL` / smoke test |
+| `/auto-repair-shop/{env}/sqs/billing-queue-url` | fila consumidora |
+| `/auto-repair-shop/{env}/billing/node-port` | NodePort do Service |
+| `/auto-repair-shop/{env}/apigw/endpoint` | endpoint do API Gateway, usado no smoke test |
 | `auto-repair-shop/{env}/mercadopago` (Secrets Manager) | populado pelo CI, lido pelo ESO |
+
+O `APP_BASE_URL` recebe o endpoint do API Gateway **com o sufixo `/billing`**, que é o prefixo da
+rota no gateway. Sem ele, o link de aprovação do e-mail e o `notification_url` do Mercado Pago
+apontam para rotas inexistentes e respondem 404.
 
 ## CI/CD
 
-- `pr-check.yaml`: `./gradlew test` + `./gradlew integrationTest` em cada PR.
-- `build-and-deploy.yaml`: testa, builda/publica a imagem no GHCR, popula o secret do Mercado
-  Pago, reescreve o ConfigMap com valores de SSM e aplica o overlay Kustomize.
+- `pr-check.yaml`: unit, integration, BDD e Sonar em cada PR.
+- `build-and-deploy.yaml`: testa, publica a imagem no GHCR, popula o secret do Mercado Pago,
+  reescreve o ConfigMap com valores do SSM e aplica o overlay Kustomize em hml e depois em prod.
+  O deploy de produção fica pendente de aprovação (`required_reviewers`).
 
-### Secrets necessários no GitHub
+### Secrets necessários
 
 `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `GHCR_PAT`, `GHCR_TOKEN`,
-`MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`.
+`MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `SONAR_TOKEN`.
