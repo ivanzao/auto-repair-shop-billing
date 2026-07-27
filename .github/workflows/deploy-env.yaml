@@ -44,6 +44,7 @@ jobs:
           SNS_TOPIC=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sns/billing-events-topic-arn --query Parameter.Value --output text)
           QUEUE_URL=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/sqs/billing-queue-url --query Parameter.Value --output text)
           APIGW=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/apigw/endpoint --query Parameter.Value --output text)
+          APIGW="${APIGW%/}"
           NODE_PORT=$(aws ssm get-parameter --name /auto-repair-shop/${{ env.ENV }}/billing/node-port --query Parameter.Value --output text)
           {
             echo "cluster=$CLUSTER"
@@ -51,6 +52,7 @@ jobs:
             echo "sns_topic=$SNS_TOPIC"
             echo "queue_url=$QUEUE_URL"
             echo "apigw_endpoint=$APIGW"
+            echo "app_base_url=$APIGW/billing"
             echo "node_port=$NODE_PORT"
           } >> "$GITHUB_OUTPUT"
 
@@ -110,7 +112,7 @@ jobs:
             DATABASE_USERNAME: "${{ steps.db.outputs.user }}"
             SNS_TOPIC_ARN: "${{ steps.ssm.outputs.sns_topic }}"
             SQS_QUEUE_URL: "${{ steps.ssm.outputs.queue_url }}"
-            APP_BASE_URL: "${{ steps.ssm.outputs.apigw_endpoint }}"
+            APP_BASE_URL: "${{ steps.ssm.outputs.app_base_url }}"
             MERCADOPAGO_API_URL: "https://api.mercadopago.com"
           EOF
 
